@@ -19,11 +19,22 @@ _LOGGER = logging.getLogger(__name__)
 
 # token CSRF bywa w ukrytym polu formularza albo w meta tagu - probujemy oba
 CSRF_PATTERNS = (
-    r'name="_csrf_token"[^>]*value="([^"]+)"',
-    r'value="([^"]+)"[^>]*name="_csrf_token"',
-    r'name="csrf-token"[^>]*content="([^"]+)"',
-    r'content="([^"]+)"[^>]*name="csrf-token"',
+    r'name=["\']_csrf_token["\'][^>]*value=["\']([^"\']+)["\']',
+    r'value=["\']([^"\']+)["\'][^>]*name=["\']_csrf_token["\']',
+    r'name=["\']csrf-token["\'][^>]*content=["\']([^"\']+)["\']',
+    r'content=["\']([^"\']+)["\'][^>]*name=["\']csrf-token["\']',
+    r'name=["\']csrf_token["\'][^>]*value=["\']([^"\']+)["\']',
 )
+
+# czesc serwerow odrzuca zapytania bez naglowkow przegladarki
+DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
+}
 
 
 class KaisaiError(Exception):
@@ -60,19 +71,34 @@ class KaisaiKsmApi:
     async def _fetch_csrf(self) -> str:
         url = f"{self._host}/{self._locale}/login"
         try:
-            async with self._session.get(url) as resp:
+            async with self._session.get(url, headers=DEFAULT_HEADERS) as resp:
+                status = resp.status
                 html = await resp.text()
         except aiohttp.ClientError as err:
-            raise KaisaiConnectionError(f"Nie mozna pobrac strony logowania: {err}") from err
+            raise KaisaiConnectionError(
+                f"Nie mozna pobrac strony logowania {url}: {type(err).__name__}: {err}"
+            ) from err
+
+        if status >= 400:
+            raise KaisaiConnectionError(f"Strona logowania {url} zwrocila HTTP {status}")
 
         for pattern in CSRF_PATTERNS:
             match = re.search(pattern, html)
             if match:
                 self._csrf = match.group(1)
+                _LOGGER.debug("Znaleziono token CSRF (%d znakow)", len(self._csrf))
                 return self._csrf
 
+        _LOGGER.debug(
+            "Strona logowania bez rozpoznanego tokenu CSRF (HTTP %s, %d znakow). "
+            "Poczatek odpowiedzi: %s",
+            status,
+            len(html),
+            html[:1000],
+        )
         raise KaisaiConnectionError(
-            "Nie znaleziono tokenu CSRF na stronie logowania - portal mogl zmienic format"
+            f"Nie znaleziono tokenu CSRF na {url} (HTTP {status}, {len(html)} znakow) - "
+            "wlacz debug dla custom_components.kaisai_ksm, zeby zobaczyc tresc strony"
         )
 
     async def async_login(self) -> None:
@@ -86,7 +112,9 @@ class KaisaiKsmApi:
         }
 
         try:
-            async with self._session.post(url, data=payload, allow_redirects=False) as resp:
+            async with self._session.post(
+                url, data=payload, headers=DEFAULT_HEADERS, allow_redirects=False
+            ) as resp:
                 if resp.status in (301, 302, 303, 307, 308):
                     location = resp.headers.get("Location", "")
                     # przekierowanie z powrotem na login = zle dane
@@ -106,7 +134,9 @@ class KaisaiKsmApi:
         """Zwroc dane konta albo None, gdy sesja wygasla."""
         url = f"{self._host}/api/current_user"
         try:
-            async with self._session.get(url, headers={"Accept": "application/json"}) as resp:
+            async with self._session.get(
+                url, headers={**DEFAULT_HEADERS, "Accept": "application/json"}
+            ) as resp:
                 if resp.status in (401, 403):
                     return None
                 if resp.status >= 400:
@@ -116,7 +146,7 @@ class KaisaiKsmApi:
                     return None
                 return await resp.json()
         except aiohttp.ClientError as err:
-            raise KaisaiConnectionError(f"Blad polaczenia: {err}") from err
+            raise KaisaiConnectionError(f"Blad polaczenia z {url}: {type(err).__name__}: {err}") from err
 
     async def async_get_data(self) -> dict[str, Any]:
         """Pobierz dane, w razie potrzeby logujac sie ponownie."""
