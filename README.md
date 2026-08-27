@@ -132,6 +132,15 @@ Portal to aplikacja Phoenix/Elixir. Integracja:
    urządzenia i pełny stan każdego z nich,
 5. przy wygaśnięciu sesji loguje się ponownie automatycznie.
 
+## Wydawanie nowej wersji
+
+Release powstaje automatycznie. Wystarczy podbić `version` w
+`custom_components/kaisai_ksm/manifest.json`, zacommitować i wypchnąć na `main` —
+workflow sam utworzy tag, release i załączy spakowaną integrację.
+
+Każdy push jest dodatkowo sprawdzany przez hassfest (walidacja manifestu
+Home Assistant) i walidator HACS.
+
 ## Wesprzyj projekt
 
 Jeśli ta integracja oszczędziła Ci wieczoru z dokumentacją Modbusa albo

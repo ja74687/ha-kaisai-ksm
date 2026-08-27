@@ -1,0 +1,53 @@
+name: Release
+
+# Release powstaje sam, gdy zmieni sie "version" w manifescie integracji.
+# Czyli: podbij wersje -> commit -> push i gotowe.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "custom_components/kaisai_ksm/manifest.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Odczytaj wersje z manifestu
+        id: manifest
+        run: |
+          VERSION=$(jq -r .version custom_components/kaisai_ksm/manifest.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Wersja w manifescie: $VERSION"
+
+      - name: Sprawdz czy tag juz istnieje
+        id: tag
+        run: |
+          if git rev-parse "v${{ steps.manifest.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag v${{ steps.manifest.outputs.version }} juz jest - pomijam"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Spakuj integracje
+        if: steps.tag.outputs.exists == 'false'
+        run: |
+          cd custom_components/kaisai_ksm
+          zip -r "$GITHUB_WORKSPACE/kaisai_ksm.zip" . -x '*__pycache__*'
+
+      - name: Utworz release
+        if: steps.tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.manifest.outputs.version }}
+          name: v${{ steps.manifest.outputs.version }}
+          generate_release_notes: true
+          files: kaisai_ksm.zip
