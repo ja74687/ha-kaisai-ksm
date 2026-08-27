@@ -51,6 +51,11 @@ i to z niej korzysta ta integracja. **Nic nie trzeba otwierać ani przerabiać.*
 Zakresy min/max integracja bierze wprost z API, więc nie da się ustawić
 wartości spoza tego, co dopuszcza sterownik.
 
+Zmiana nastawy pokazuje się natychmiast, choć potwierdzenie z chmury przychodzi
+z opóźnieniem — droga prowadzi przez bramkę KSM aż do sterownika pompy i wraca.
+Do czasu potwierdzenia encja ma atrybut `oczekuje_na_potwierdzenie: true`
+oraz `wartosc_w_portalu` z wartością, którą wciąż raportuje portal.
+
 ## Instalacja
 
 ### HACS (zalecane)
