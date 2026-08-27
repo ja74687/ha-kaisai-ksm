@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ha-kaisai-ksm">
+  <path d="M45 14 H21 A7 7 0 0 0 14 21 V43 A7 7 0 0 0 21 50 H45"
+        fill="none" stroke="#F2F4F7" stroke-width="6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M21 41 L28 30 L34 37 L41 21 L47 31 L53 12"
+        fill="none" stroke="#5B9BD5" stroke-width="5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

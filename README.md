@@ -1,4 +1,8 @@
-# Kaisai KSM — integracja Home Assistant
+<p align="center">
+  <img src="assets/icon.svg" alt="ha-kaisai-ksm" width="120" height="120" />
+</p>
+
+<h1 align="center">Kaisai KSM — integracja Home Assistant</h1>
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
