@@ -111,38 +111,67 @@ class KaisaiKsmApi:
             "password": self._password,
         }
 
+        headers = {**DEFAULT_HEADERS, "Referer": url, "Origin": self._host}
         try:
             async with self._session.post(
-                url, data=payload, headers=DEFAULT_HEADERS, allow_redirects=False
+                url, data=payload, headers=headers, allow_redirects=False
             ) as resp:
-                if resp.status in (301, 302, 303, 307, 308):
-                    location = resp.headers.get("Location", "")
-                    # przekierowanie z powrotem na login = zle dane
+                status = resp.status
+                location = resp.headers.get("Location", "")
+                _LOGGER.debug(
+                    "Logowanie: HTTP %s, Location=%s, ciasteczka=%s",
+                    status,
+                    location,
+                    [c.key for c in self._session.cookie_jar],
+                )
+                if status in (301, 302, 303, 307, 308):
                     if "login" in location:
                         raise KaisaiAuthError("Nieprawidlowy login lub haslo")
-                    _LOGGER.debug("Zalogowano, przekierowanie na %s", location)
-                    return
-                if resp.status == 200:
-                    # brak przekierowania zwykle oznacza ponowne wyswietlenie formularza
+                elif status == 200:
                     raise KaisaiAuthError("Logowanie odrzucone przez portal")
-                raise KaisaiConnectionError(f"Logowanie zwrocilo HTTP {resp.status}")
+                else:
+                    raise KaisaiConnectionError(f"Logowanie zwrocilo HTTP {status}")
         except aiohttp.ClientError as err:
             raise KaisaiConnectionError(f"Blad polaczenia przy logowaniu: {err}") from err
+
+        # przegladarka po zalogowaniu wchodzi na strone panelu - dopiero wtedy
+        # sesja jest w pelni ustanowiona
+        landing = location if location.startswith("http") else f"{self._host}{location or '/' + self._locale}"
+        try:
+            async with self._session.get(landing, headers=DEFAULT_HEADERS) as resp:
+                _LOGGER.debug("Strona panelu %s -> HTTP %s", landing, resp.status)
+                await resp.read()
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("Nie udalo sie wejsc na %s: %s", landing, err)
 
     # ------------------------------------------------------------------ dane
     async def _get_current_user(self) -> dict[str, Any] | None:
         """Zwroc dane konta albo None, gdy sesja wygasla."""
         url = f"{self._host}/api/current_user"
+        headers = {
+            **DEFAULT_HEADERS,
+            "Accept": "application/json, text/plain, */*",
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": f"{self._host}/{self._locale}",
+        }
         try:
-            async with self._session.get(
-                url, headers={**DEFAULT_HEADERS, "Accept": "application/json"}
-            ) as resp:
-                if resp.status in (401, 403):
+            async with self._session.get(url, headers=headers) as resp:
+                status = resp.status
+                ctype = resp.headers.get("content-type", "")
+                if status in (401, 403):
+                    _LOGGER.debug("/api/current_user -> HTTP %s (brak sesji)", status)
                     return None
-                if resp.status >= 400:
-                    raise KaisaiConnectionError(f"/api/current_user zwrocilo HTTP {resp.status}")
-                if "json" not in resp.headers.get("content-type", ""):
-                    # portal odesial HTML = wylogowani
+                if status >= 400:
+                    body = (await resp.text())[:400]
+                    _LOGGER.debug(
+                        "/api/current_user -> HTTP %s (%s). Odpowiedz: %s", status, ctype, body
+                    )
+                    # portal zwraca 500 takze wtedy, gdy sesja jest niewazna
+                    if status == 500:
+                        return None
+                    raise KaisaiConnectionError(f"/api/current_user zwrocilo HTTP {status}")
+                if "json" not in ctype:
+                    _LOGGER.debug("/api/current_user zwrocilo %s zamiast JSON", ctype)
                     return None
                 return await resp.json()
         except aiohttp.ClientError as err:
@@ -156,7 +185,10 @@ class KaisaiKsmApi:
             await self.async_login()
             data = await self._get_current_user()
         if data is None:
-            raise KaisaiAuthError("Ponowne logowanie nie powiodlo sie")
+            raise KaisaiAuthError(
+                "Zalogowano, ale /api/current_user nie zwrocilo danych (portal odpowiada "
+                "bledem 500 lub HTML-em). Wlacz debug dla custom_components.kaisai_ksm."
+            )
         return data
 
     # ------------------------------------------------------------------ zapis
