@@ -270,11 +270,14 @@ class KaisaiKsmApi:
         if self._csrf:
             headers["x-csrf-token"] = self._csrf
 
+        # Kolejnosc wynika z obserwacji: POST na ten adres zwraca 404, a PUT 400,
+        # czyli metoda jest dobra, a chodzilo o strukture ciala. Biblioteka
+        # compit-inext-api uzywa klucza "values" - i to jest wariant pierwszy.
         variants: list[tuple[str, dict[str, Any]]] = [
-            ("post", {"params": [{"code": code, "value": value}]}),
+            ("put", {"values": [{"code": code, "value": value}]}),
             ("put", {"params": [{"code": code, "value": value}]}),
-            ("post", {"code": code, "value": value}),
             ("put", {"code": code, "value": value}),
+            ("post", {"values": [{"code": code, "value": value}]}),
         ]
 
         problems: list[str] = []
@@ -285,8 +288,13 @@ class KaisaiKsmApi:
                 ) as resp:
                     text = await resp.text()
                     if resp.status < 300:
-                        _LOGGER.info(
-                            "Zapis %s=%s OK (%s, %s)", code, value, method.upper(), body
+                        _LOGGER.debug(
+                            "Zapis %s=%s OK (%s %s) -> %s",
+                            code,
+                            value,
+                            method.upper(),
+                            body,
+                            text[:200],
                         )
                         return True
                     problems.append(f"{method.upper()} {body} -> {resp.status}: {text[:120]}")
