@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Kaisai KSM",
-        "description": "Podaj dane logowania do portalu sterowanie.kaisai.com (te same co w aplikacji Sterowanie Kaisai ZNS).",
+        "description": "Podaj dane logowania do portalu sterowanie.kaisai.com (te same co w aplikacji Sterowanie Kaisai ZNS).{error_detail}",
         "data": {
           "email": "E-mail",
           "password": "Hasło",

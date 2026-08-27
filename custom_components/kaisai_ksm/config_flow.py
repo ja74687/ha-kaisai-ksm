@@ -52,6 +52,7 @@ class KaisaiConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {"error_detail": ""}
 
         if user_input is not None:
             session = async_create_clientsession(self.hass)
@@ -65,12 +66,17 @@ class KaisaiConfigFlow(ConfigFlow, domain=DOMAIN):
                 await api.async_login()
                 data = await api.async_get_data()
                 devices = parse_devices(data)
-            except KaisaiAuthError:
+            except KaisaiAuthError as err:
+                _LOGGER.error("Logowanie do portalu Kaisai odrzucone: %s", err)
+                placeholders["error_detail"] = f"\n\nSzczegoly: {err}"
                 errors["base"] = "invalid_auth"
-            except KaisaiConnectionError:
+            except KaisaiConnectionError as err:
+                _LOGGER.error("Nie mozna polaczyc sie z portalem Kaisai: %s", err)
+                placeholders["error_detail"] = f"\n\nSzczegoly: {err}"
                 errors["base"] = "cannot_connect"
-            except Exception:  # noqa: BLE001
+            except Exception as err:  # noqa: BLE001
                 _LOGGER.exception("Nieoczekiwany blad podczas konfiguracji")
+                placeholders["error_detail"] = f"\n\nSzczegoly: {err}"
                 errors["base"] = "unknown"
             else:
                 if not devices:
@@ -84,7 +90,10 @@ class KaisaiConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
 
         return self.async_show_form(
-            step_id="user", data_schema=SCHEMA, errors=errors
+            step_id="user",
+            data_schema=SCHEMA,
+            errors=errors,
+            description_placeholders=placeholders,
         )
 
     @staticmethod
