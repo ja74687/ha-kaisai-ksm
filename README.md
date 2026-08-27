@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.svg" alt="ha-kaisai-ksm" width="120" height="120" />
+  <img src="https://raw.githubusercontent.com/ja74687/ha-kaisai-ksm/main/assets/icon-256.png" alt="ha-kaisai-ksm" width="120" height="120" />
 </p>
 
 <h1 align="center">Kaisai KSM — integracja Home Assistant</h1>
