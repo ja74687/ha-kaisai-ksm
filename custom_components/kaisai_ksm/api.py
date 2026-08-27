@@ -9,6 +9,8 @@ bramki, urzadzenia i pelny stan kazdego z nich.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 import re
 from typing import Any
@@ -25,6 +27,14 @@ CSRF_PATTERNS = (
     r'content=["\']([^"\']+)["\'][^>]*name=["\']csrf-token["\']',
     r'name=["\']csrf_token["\'][^>]*value=["\']([^"\']+)["\']',
 )
+
+# JWT ma trzy czesci base64url rozdzielone kropkami i zawsze zaczyna sie od "eyJ"
+TOKEN_PATTERN = re.compile(
+    rb"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"
+)
+
+# nazwa ciasteczka sesji Phoenixa, w ktorym siedzi token Guardiana
+SESSION_COOKIE = "_compit_key"
 
 # czesc serwerow odrzuca zapytania bez naglowkow przegladarki
 DEFAULT_HEADERS = {
@@ -66,6 +76,7 @@ class KaisaiKsmApi:
         self._password = password
         self._locale = locale
         self._csrf: str | None = None
+        self._token: str | None = None
 
     # ------------------------------------------------------------------ auth
     async def _fetch_csrf(self) -> str:
@@ -137,29 +148,81 @@ class KaisaiKsmApi:
         # przegladarka po zalogowaniu wchodzi na strone panelu - dopiero wtedy
         # sesja jest w pelni ustanowiona
         landing = location if location.startswith("http") else f"{self._host}{location or '/' + self._locale}"
+        html = ""
         try:
             async with self._session.get(landing, headers=DEFAULT_HEADERS) as resp:
                 _LOGGER.debug("Strona panelu %s -> HTTP %s", landing, resp.status)
-                await resp.read()
+                html = await resp.text()
         except aiohttp.ClientError as err:
             _LOGGER.debug("Nie udalo sie wejsc na %s: %s", landing, err)
 
-    # ------------------------------------------------------------------ dane
-    async def _get_current_user(self) -> dict[str, Any] | None:
-        """Zwroc dane konta albo None, gdy sesja wygasla."""
-        url = f"{self._host}/api/current_user"
+        # API wymaga naglowka Authorization z tokenem Guardiana; token jest
+        # zapakowany w ciasteczku sesji, a zapasowo bywa w kodzie strony
+        self._token = self._token_from_cookies() or self._token_from_html(html)
+        if self._token:
+            _LOGGER.debug("Token API wyciagniety (%d znakow)", len(self._token))
+        else:
+            _LOGGER.warning(
+                "Nie udalo sie wyciagnac tokenu API z sesji - zapytania moga byc "
+                "odrzucane przez portal"
+            )
+
+    # ----------------------------------------------------------------- token
+    def _token_from_cookies(self) -> str | None:
+        """Wyciagnij JWT z ciasteczka sesji Phoenixa.
+
+        Ciasteczko ma postac SFMyNTY.<dane>.<podpis>, gdzie <dane> to base64url
+        z zakodowana mapa sesji. W srodku, jako zwykly tekst, siedzi
+        guardian_default_token - czyli JWT, ktorego oczekuje API.
+        """
+        raw_cookie = None
+        for cookie in self._session.cookie_jar:
+            if cookie.key == SESSION_COOKIE:
+                raw_cookie = cookie.value
+                break
+        if not raw_cookie:
+            return None
+
+        parts = raw_cookie.split(".")
+        candidates = [parts[1]] if len(parts) >= 2 else parts
+        for chunk in candidates:
+            try:
+                decoded = base64.urlsafe_b64decode(chunk + "=" * (-len(chunk) % 4))
+            except (binascii.Error, ValueError):
+                continue
+            match = TOKEN_PATTERN.search(decoded)
+            if match:
+                return match.group(0).decode("ascii")
+        return None
+
+    @staticmethod
+    def _token_from_html(html: str) -> str | None:
+        """Zapasowo: token bywa tez wstrzykniety w strone panelu."""
+        match = TOKEN_PATTERN.search(html.encode("utf-8", "ignore"))
+        return match.group(0).decode("ascii") if match else None
+
+    def _api_headers(self) -> dict[str, str]:
         headers = {
             **DEFAULT_HEADERS,
             "Accept": "application/json, text/plain, */*",
             "X-Requested-With": "XMLHttpRequest",
             "Referer": f"{self._host}/{self._locale}",
         }
+        if self._token:
+            headers["Authorization"] = f"Bearer {self._token}"
+        return headers
+
+    # ------------------------------------------------------------------ dane
+    async def _get_current_user(self) -> dict[str, Any] | None:
+        """Zwroc dane konta albo None, gdy sesja wygasla."""
+        url = f"{self._host}/api/current_user"
         try:
-            async with self._session.get(url, headers=headers) as resp:
+            async with self._session.get(url, headers=self._api_headers()) as resp:
                 status = resp.status
                 ctype = resp.headers.get("content-type", "")
                 if status in (401, 403):
                     _LOGGER.debug("/api/current_user -> HTTP %s (brak sesji)", status)
+                    self._token = None
                     return None
                 if status >= 400:
                     body = (await resp.text())[:400]
@@ -168,6 +231,7 @@ class KaisaiKsmApi:
                     )
                     # portal zwraca 500 takze wtedy, gdy sesja jest niewazna
                     if status == 500:
+                        self._token = None
                         return None
                     raise KaisaiConnectionError(f"/api/current_user zwrocilo HTTP {status}")
                 if "json" not in ctype:
@@ -202,7 +266,7 @@ class KaisaiKsmApi:
         Jesli zapis nie dziala, wlacz debug i zobacz w logu, co odpowiada serwer.
         """
         url = f"{self._host}/api/gates/{gate_id}/devices/{device_id}/params"
-        headers = {"Accept": "application/json"}
+        headers = self._api_headers()
         if self._csrf:
             headers["x-csrf-token"] = self._csrf
 

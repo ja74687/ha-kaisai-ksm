@@ -128,9 +128,15 @@ Portal to aplikacja Phoenix/Elixir. Integracja:
 1. pobiera stronę logowania i wyciąga z niej token CSRF,
 2. wysyła `POST /pl/login` z polami `_csrf_token`, `email`, `password`,
 3. zapamiętuje ciasteczko sesji `_compit_key`,
-4. odpytuje `GET /api/current_user` — jeden endpoint zwraca konto, bramki,
+4. wyciąga z tego ciasteczka token JWT (Guardian) — samo ciasteczko nie
+   wystarcza, API wymaga nagłówka `Authorization: Bearer`, a token siedzi
+   w zakodowanej mapie sesji Phoenixa,
+5. odpytuje `GET /api/current_user` — jeden endpoint zwraca konto, bramki,
    urządzenia i pełny stan każdego z nich,
-5. przy wygaśnięciu sesji loguje się ponownie automatycznie.
+6. przy wygaśnięciu sesji loguje się ponownie automatycznie.
+
+Bez nagłówka z tokenem portal odpowiada `HTTP 500`, a nie `401` — stąd
+dodatkowa obsługa: pięćsetka z API jest traktowana jak nieważna sesja.
 
 ## Wydawanie nowej wersji
 
