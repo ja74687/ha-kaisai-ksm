@@ -1,0 +1,13 @@
+{
+  "domain": "kaisai_ksm",
+  "name": "Kaisai KSM",
+  "codeowners": [
+    "@ja74687"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/ja74687/ha-kaisai-ksm",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/ja74687/ha-kaisai-ksm/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

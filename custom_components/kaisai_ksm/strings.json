@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Kaisai KSM",
+        "description": "Podaj dane logowania do portalu sterowanie.kaisai.com (te same co w aplikacji Sterowanie Kaisai ZNS).",
+        "data": {
+          "email": "E-mail",
+          "password": "Hasło",
+          "host": "Adres portalu",
+          "phases": "Liczba faz zasilania pompy",
+          "power_factor": "Współczynnik mocy (do wyliczenia poboru)",
+          "scan_interval": "Częstotliwość odpytywania [s]"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nie można połączyć się z portalem",
+      "invalid_auth": "Nieprawidłowy login lub hasło",
+      "no_devices": "Konto nie ma przypisanego żadnego urządzenia",
+      "unknown": "Nieoczekiwany błąd"
+    },
+    "abort": {
+      "already_configured": "To konto jest już skonfigurowane"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ustawienia Kaisai KSM",
+        "data": {
+          "phases": "Liczba faz zasilania pompy",
+          "power_factor": "Współczynnik mocy (do wyliczenia poboru)",
+          "scan_interval": "Częstotliwość odpytywania [s]"
+        }
+      }
+    }
+  }
+}
