@@ -114,6 +114,27 @@ STATE_SENSORS = {
     "__rm_on-off": ("Stan pompy", "mdi:power"),
 }
 
+# --- tryby pracy pompy ------------------------------------------------------
+CODE_MODE = "__rm_mode"
+CODE_MODE_H05 = "__rm_mode_h05_off"
+
+# parametry zapisywalne wyborem z listy -> encje select
+SELECTS = {
+    CODE_MODE: ("Tryb pracy", "mdi:tune"),
+    CODE_MODE_H05: ("Tryb pracy przy wylaczonym H05", "mdi:tune-variant"),
+}
+
+# Awaryjna mapa trybow, uzywana TYLKO gdy portal nie odda definicji parametru.
+# Wyprowadzona z kolejnosci opcji w panelu webowym przy potwierdzonym 3 =
+# "Hot Water +Heating". Jesli portal poda wlasna liste, ma ona pierwszenstwo.
+MODE_FALLBACK: dict[int, str] = {
+    0: "Hot Water",
+    1: "Ogrzewanie",
+    2: "Heating and Cooling",
+    3: "Hot Water +Heating",
+    4: "Hot Water+Cooling",
+}
+
 # parametry zapisywalne -> encje number
 NUMBERS = {
     "__rr_r01_hot_water_setpoint": ("Nastawa CWU", T, "temperature", "mdi:water-thermometer"),

@@ -255,6 +255,30 @@ class KaisaiKsmApi:
             )
         return data
 
+    async def async_get_definitions(self, gate_id: int) -> dict[str, Any] | None:
+        """Pobierz definicje parametrow bramki (listy wartosci dla enumow).
+
+        Portal wystawia je pod /api/gates/{gate}/device_definitions/list.
+        Ksztalt odpowiedzi nie jest udokumentowany, wiec zwracamy surowy JSON,
+        a wyciaganiem opcji zajmuje sie extract_options().
+        """
+        url = f"{self._host}/api/gates/{gate_id}/device_definitions/list"
+        try:
+            async with self._session.get(url, headers=self._api_headers()) as resp:
+                if resp.status >= 400:
+                    _LOGGER.debug(
+                        "device_definitions/list -> HTTP %s (%s)",
+                        resp.status,
+                        (await resp.text())[:200],
+                    )
+                    return None
+                if "json" not in resp.headers.get("content-type", ""):
+                    return None
+                return await resp.json()
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("Nie udalo sie pobrac definicji: %s", err)
+            return None
+
     # ------------------------------------------------------------------ zapis
     async def async_set_param(
         self, gate_id: int, device_id: int, code: str, value: float | int | str
@@ -332,3 +356,68 @@ def parse_devices(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 "params": params,
             }
     return devices
+
+
+def extract_options(definitions: Any, code: str) -> dict[int, str]:
+    """Wyciagnij mape {wartosc: etykieta} dla podanego kodu parametru.
+
+    Struktura odpowiedzi portalu nie jest udokumentowana i potrafi sie roznic
+    miedzy wersjami, wiec zamiast zakladac konkretny ksztalt przechodzimy cale
+    drzewo i szukamy obiektu opisujacego ten parametr. Za liste wartosci
+    uznajemy dowolna liste slownikow, w ktorych jest cos wygladajacego na
+    wartosc i cos wygladajacego na etykiete.
+    """
+    found: dict[int, str] = {}
+
+    label_keys = ("label", "value_label", "name", "text", "title")
+    value_keys = ("value", "id", "key")
+    list_keys = ("values", "options", "enum", "choices", "items", "list")
+
+    def as_int(raw: Any) -> int | None:
+        if isinstance(raw, bool):
+            return None
+        if isinstance(raw, int):
+            return raw
+        if isinstance(raw, str):
+            digits = raw.lstrip("_")
+            if digits.lstrip("-").isdigit():
+                return int(digits)
+        return None
+
+    def harvest(candidate: Any) -> dict[int, str]:
+        out: dict[int, str] = {}
+        if not isinstance(candidate, list):
+            return out
+        for item in candidate:
+            if not isinstance(item, dict):
+                continue
+            label = next(
+                (item[k] for k in label_keys if isinstance(item.get(k), str)), None
+            )
+            value = next(
+                (as_int(item[k]) for k in value_keys if as_int(item.get(k)) is not None),
+                None,
+            )
+            if label is not None and value is not None:
+                out[value] = label
+        return out
+
+    def walk(node: Any) -> None:
+        nonlocal found
+        if found:
+            return
+        if isinstance(node, dict):
+            if node.get("code") == code:
+                for key in list_keys:
+                    harvested = harvest(node.get(key))
+                    if harvested:
+                        found = harvested
+                        return
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(definitions)
+    return found
