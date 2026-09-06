@@ -135,6 +135,20 @@ MODE_FALLBACK: dict[int, str] = {
     4: "Hot Water+Cooling",
 }
 
+# --- wlacznik pompy ---------------------------------------------------------
+CODE_ONOFF = "__rm_on-off"
+
+# parametry zapisywalne wlacznikiem -> encje switch
+SWITCHES = {
+    CODE_ONOFF: ("Zasilanie pompy", "mdi:power"),
+}
+
+# Awaryjne wartosci, gdy portal nie odda definicji. Potwierdzone: 1 = ON.
+ONOFF_FALLBACK: dict[str, int] = {"on": 1, "off": 0}
+
+# kody, dla ktorych warto pobrac liste dopuszczalnych wartosci
+OPTION_CODES = tuple(SELECTS) + tuple(SWITCHES)
+
 # parametry zapisywalne -> encje number
 NUMBERS = {
     "__rr_r01_hot_water_setpoint": ("Nastawa CWU", T, "temperature", "mdi:water-thermometer"),

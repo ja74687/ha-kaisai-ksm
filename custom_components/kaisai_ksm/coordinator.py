@@ -17,7 +17,7 @@ from .api import (
     extract_options,
     parse_devices,
 )
-from .const import DOMAIN, SELECTS
+from .const import DOMAIN, OPTION_CODES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ class KaisaiCoordinator(DataUpdateCoordinator[dict]):
                 definitions = await self.api.async_get_definitions(gate_id)
                 per_code: dict[str, dict[int, str]] = {}
                 if definitions is not None:
-                    for code in SELECTS:
+                    for code in OPTION_CODES:
                         options = extract_options(definitions, code)
                         if options:
                             per_code[code] = options
