@@ -358,6 +358,26 @@ def parse_devices(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return devices
 
 
+def as_int(raw: Any) -> int | None:
+    """Zamien wartosc parametru na liczbe.
+
+    Portal Kaisai raz oddaje numer trybu jako liczbe, raz jako napis ("3"),
+    a bywa, ze z podkreslnikiem z przodu. Bez tego encje select i switch nie
+    potrafily dopasowac biezacej wartosci do listy i pokazywaly "unknown".
+    """
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float) and raw.is_integer():
+        return int(raw)
+    if isinstance(raw, str):
+        digits = raw.strip().lstrip("_")
+        if digits.lstrip("-").isdigit():
+            return int(digits)
+    return None
+
+
 def extract_options(definitions: Any, code: str) -> dict[int, str]:
     """Wyciagnij mape {wartosc: etykieta} dla podanego kodu parametru.
 
@@ -373,16 +393,6 @@ def extract_options(definitions: Any, code: str) -> dict[int, str]:
     value_keys = ("value", "id", "key")
     list_keys = ("values", "options", "enum", "choices", "items", "list")
 
-    def as_int(raw: Any) -> int | None:
-        if isinstance(raw, bool):
-            return None
-        if isinstance(raw, int):
-            return raw
-        if isinstance(raw, str):
-            digits = raw.lstrip("_")
-            if digits.lstrip("-").isdigit():
-                return int(digits)
-        return None
 
     def harvest(candidate: Any) -> dict[int, str]:
         out: dict[int, str] = {}

@@ -12,6 +12,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 
+from .api import as_int
 from .const import DOMAIN, MODE_FALLBACK, SELECTS
 from .coordinator import KaisaiCoordinator
 from .entity import KaisaiEntity
@@ -62,29 +63,48 @@ class KaisaiSelect(KaisaiEntity, SelectEntity):
         uzywamy mapy awaryjnej, uzupelnionej o etykiete biezacej wartosci -
         dzieki temu aktualny tryb zawsze jest na liscie, nawet jesli mapa
         awaryjna go nie zna.
+
+        Numery trybow przepuszczamy przez as_int, bo portal potrafi oddac je
+        jako napis. Wczesniej takie odczyty nie trafialy do mapy i encja
+        pokazywala "unknown".
         """
-        options = dict(self.device.get("options", {}).get(self._code) or {})
+        options: dict[int, str] = {}
+        for raw_value, label in (self.device.get("options", {}).get(self._code) or {}).items():
+            value = as_int(raw_value)
+            if value is not None and isinstance(label, str):
+                options[value] = label
         if not options:
             options = dict(MODE_FALLBACK)
+
         param = self.params.get(self._code) or {}
-        value = param.get("value")
+        value = as_int(param.get("value"))
         label = param.get("value_label")
-        if isinstance(value, int) and isinstance(label, str):
+        if value is not None and isinstance(label, str) and label:
             options[value] = label
         return options
 
     @property
     def options(self) -> list[str]:
-        return list(self._options_map.values())
+        """Lista wyboru.
+
+        Home Assistant pokazuje "unknown", gdy biezaca wartosc nie znajduje sie
+        na liscie. Jesli portal przysyla etykiete, ktorej nie ma w definicjach,
+        dopisujemy ja na koniec - lepiej pokazac prawdziwy tryb niz nic.
+        """
+        labels = list(self._options_map.values())
+        current = self._portal_option()
+        if isinstance(current, str) and current and current not in labels:
+            labels.append(current)
+        return labels
 
     # ------------------------------------------------------------- odczyt
     def _portal_option(self) -> str | None:
         param = self.params.get(self._code) or {}
         label = param.get("value_label")
-        if isinstance(label, str):
+        if isinstance(label, str) and label:
             return label
-        value = param.get("value")
-        return self._options_map.get(value) if isinstance(value, int) else None
+        value = as_int(param.get("value"))
+        return self._options_map.get(value) if value is not None else None
 
     @property
     def _pending_active(self) -> bool:
@@ -116,6 +136,12 @@ class KaisaiSelect(KaisaiEntity, SelectEntity):
             attrs["zrodlo_listy"] = "mapa awaryjna (portal nie oddal definicji)"
         else:
             attrs["zrodlo_listy"] = "definicje z portalu"
+        # podglad surowych danych - przy rozjezdzie etykiet od razu widac,
+        # co portal faktycznie przysyla
+        param = self.params.get(self._code) or {}
+        attrs["wartosc_surowa"] = param.get("value")
+        attrs["etykieta_z_portalu"] = param.get("value_label")
+        attrs["liczba_opcji"] = len(self.options)
         return attrs
 
     # -------------------------------------------------------------- zapis

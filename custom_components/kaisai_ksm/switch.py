@@ -12,6 +12,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 
+from .api import as_int
 from .const import DOMAIN, ONOFF_FALLBACK, SWITCHES
 from .coordinator import KaisaiCoordinator
 from .entity import KaisaiEntity
@@ -76,7 +77,10 @@ class KaisaiSwitch(KaisaiEntity, SwitchEntity):
         values = dict(ONOFF_FALLBACK)
 
         options = self.device.get("options", {}).get(self._code) or {}
-        for value, label in options.items():
+        for raw_value, label in options.items():
+            value = as_int(raw_value)
+            if value is None:
+                continue
             text = _normalise(str(label))
             if text in ON_LABELS:
                 values["on"] = value
@@ -84,9 +88,9 @@ class KaisaiSwitch(KaisaiEntity, SwitchEntity):
                 values["off"] = value
 
         param = self.params.get(self._code) or {}
-        value = param.get("value")
+        value = as_int(param.get("value"))
         label = param.get("value_label")
-        if isinstance(value, int) and isinstance(label, str):
+        if value is not None and isinstance(label, str):
             text = _normalise(label)
             if text in ON_LABELS:
                 values["on"] = value
@@ -105,8 +109,8 @@ class KaisaiSwitch(KaisaiEntity, SwitchEntity):
                 return True
             if text in OFF_LABELS:
                 return False
-        value = param.get("value")
-        if isinstance(value, int):
+        value = as_int(param.get("value"))
+        if value is not None:
             values = self._values
             if value == values.get("on"):
                 return True
@@ -139,6 +143,9 @@ class KaisaiSwitch(KaisaiEntity, SwitchEntity):
             attrs["zrodlo_wartosci"] = "mapa awaryjna (portal nie oddal definicji)"
         else:
             attrs["zrodlo_wartosci"] = "definicje z portalu"
+        param = self.params.get(self._code) or {}
+        attrs["wartosc_surowa"] = param.get("value")
+        attrs["etykieta_z_portalu"] = param.get("value_label")
         return attrs
 
     # -------------------------------------------------------------- zapis
